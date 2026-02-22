@@ -1,3 +1,17 @@
+# [3.2.3-beta.5] - 2026-02-22
+
+## Backend
+
+### Added
+
+- 新增 MCP (Model Context Protocol) 服务器，支持通过 Claude Desktop 等 LLM 工具管理番剧订阅
+  - SSE 传输层挂载在 `/mcp/sse`，支持 MCP 客户端连接
+  - 10 个工具：list_anime、get_anime、search_anime、subscribe_anime、unsubscribe_anime、list_downloads、list_rss_feeds、get_program_status、refresh_feeds、update_anime
+  - 4 个资源：anime/list、anime/{id}、status、rss/feeds
+  - 本地网络 IP 白名单安全中间件（RFC 1918 + 回环地址），无需 JWT 认证
+
+---
+
 # [3.2.3-beta.4] - 2026-02-22
 
 ## Backend

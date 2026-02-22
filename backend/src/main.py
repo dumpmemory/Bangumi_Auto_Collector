@@ -7,9 +7,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 from module.api import v1
 from module.api.program import program
 from module.conf import VERSION, settings, setup_logger
+from module.mcp import create_mcp_app
 
 setup_logger(reset=True)
 logger = logging.getLogger(__name__)
@@ -45,6 +47,9 @@ def create_app() -> FastAPI:
     # mount routers
     app.include_router(v1, prefix="/api")
 
+    # mount MCP server (SSE transport for LLM tool integration)
+    app.mount("/mcp", create_mcp_app())
+
     return app
 
 
@@ -73,6 +78,7 @@ if VERSION != "DEV_VERSION":
         else:
             context = {"request": request}
             return templates.TemplateResponse("index.html", context)
+
 else:
 
     @app.get("/", status_code=302, tags=["html"])

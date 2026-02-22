@@ -1,6 +1,6 @@
 [project]
 name = "auto-bangumi"
-version = "3.2.3-beta.4"
+version = "3.2.3-beta.5"
 description = "AutoBangumi - Automated anime download manager"
 requires-python = ">=3.13"
 dependencies = [
@@ -24,6 +24,7 @@ dependencies = [
     "sse-starlette>=1.6.5",
     "webauthn>=2.0.0",
     "urllib3>=2.0.3",
+    "mcp[cli]>=1.8.0",
 ]
 
 [dependency-groups]
