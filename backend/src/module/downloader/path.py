@@ -35,7 +35,7 @@ class TorrentPath:
         return media_list, subtitle_list
 
     @staticmethod
-    def _path_to_bangumi(save_path: PathLike[str] | str):
+    def _path_to_bangumi(save_path: PathLike[str] | str, torrent_name: str = ""):
         # Split save path and download path
         save_parts = Path(save_path).parts
         download_parts = Path(settings.downloader.path).parts
@@ -47,6 +47,8 @@ class TorrentPath:
                 season = int(re.findall(r"\d+", part)[0])
             elif part not in download_parts:
                 bangumi_name = part
+        if not bangumi_name:
+            bangumi_name = torrent_name
         return bangumi_name, season
 
     @staticmethod

@@ -35,7 +35,9 @@ class Aria2Downloader:
         return result.get("result")
 
     async def auth(self, retry=3):
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(connect=3.1, read=10.0, write=10.0, pool=10.0))
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=3.1, read=10.0, write=10.0, pool=10.0)
+        )
         times = 0
         while times < retry:
             try:
@@ -57,16 +59,86 @@ class Aria2Downloader:
     async def torrents_files(self, torrent_hash: str):
         return []
 
-    async def add_torrents(self, torrent_urls, torrent_files, save_path, category, tags=None):
+    async def add_torrents(
+        self, torrent_urls, torrent_files, save_path, category, tags=None
+    ):
         import base64
+
         options = {"dir": save_path}
         if torrent_urls:
             urls = torrent_urls if isinstance(torrent_urls, list) else [torrent_urls]
             for url in urls:
                 await self._call("addUri", [[url], options])
         if torrent_files:
-            files = torrent_files if isinstance(torrent_files, list) else [torrent_files]
+            files = (
+                torrent_files if isinstance(torrent_files, list) else [torrent_files]
+            )
             for f in files:
                 b64 = base64.b64encode(f).decode()
                 await self._call("addTorrent", [b64, [], options])
         return True
+
+    async def check_host(self):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def prefs_init(self, prefs):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def get_app_prefs(self):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def add_category(self, category):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def torrents_info(self, status_filter, category, tag=None):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def get_torrents_by_tag(self, tag: str) -> list[dict]:
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def torrents_delete(self, hash, delete_files: bool = True):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def torrents_pause(self, hashes: str):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def torrents_resume(self, hashes: str):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def torrents_rename_file(
+        self, torrent_hash, old_path, new_path, verify: bool = True
+    ) -> bool:
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def rss_add_feed(self, url, item_path):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def rss_remove_item(self, item_path):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def rss_get_feeds(self):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def rss_set_rule(self, rule_name, rule_def):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def move_torrent(self, hashes, new_location):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def get_download_rule(self):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def get_torrent_path(self, _hash):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def set_category(self, _hash, category):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def check_connection(self):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def remove_rule(self, rule_name):
+        raise NotImplementedError("Aria2 does not support this operation")
+
+    async def add_tag(self, _hash, tag):
+        raise NotImplementedError("Aria2 does not support this operation")

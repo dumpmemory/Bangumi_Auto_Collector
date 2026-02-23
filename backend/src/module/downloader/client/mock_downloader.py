@@ -59,7 +59,10 @@ class MockDownloader:
     ) -> list[dict]:
         """Return list of torrents matching the filter."""
         logger.debug(
-            "[MockDownloader] torrents_info(filter=%s, category=%s, tag=%s)", status_filter, category, tag
+            "[MockDownloader] torrents_info(filter=%s, category=%s, tag=%s)",
+            status_filter,
+            category,
+            tag,
         )
         result = []
         for hash_, torrent in self._torrents.items():
@@ -111,7 +114,9 @@ class MockDownloader:
         hashes = hash.split("|") if "|" in hash else [hash]
         for h in hashes:
             self._torrents.pop(h, None)
-        logger.debug("[MockDownloader] torrents_delete(%s, delete_files=%s)", hash, delete_files)
+        logger.debug(
+            "[MockDownloader] torrents_delete(%s, delete_files=%s)", hash, delete_files
+        )
 
     async def torrents_pause(self, hashes: str):
         for h in hashes.split("|"):
@@ -126,7 +131,7 @@ class MockDownloader:
         logger.debug("[MockDownloader] torrents_resume(%s)", hashes)
 
     async def torrents_rename_file(
-        self, torrent_hash: str, old_path: str, new_path: str
+        self, torrent_hash: str, old_path: str, new_path: str, verify: bool = True
     ) -> bool:
         logger.info(f"[MockDownloader] rename: {old_path} -> {new_path}")
         return True

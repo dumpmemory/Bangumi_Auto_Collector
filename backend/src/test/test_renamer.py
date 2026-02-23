@@ -1,11 +1,11 @@
 """Tests for Renamer: gen_path, rename_file, rename_collection, rename flow."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
-from module.models import EpisodeFile, Notification, SubtitleFile
 from module.manager.renamer import Renamer
-
+from module.models import EpisodeFile, Notification, SubtitleFile
 
 # ---------------------------------------------------------------------------
 # gen_path
@@ -210,27 +210,6 @@ class TestRenameFile:
             result = await renamer.rename_file(
                 torrent_name="test",
                 media_path="My Anime S01E05.mkv",
-                bangumi_name="My Anime",
-                method="pn",
-                season=1,
-                _hash="hash123",
-            )
-
-        assert result is None
-        renamer.client.torrents_rename_file.assert_not_called()
-
-    async def test_duplicate_in_check_pool_skipped(self, renamer):
-        """When new_path is already in check_pool, skip rename."""
-        ep = EpisodeFile(
-            media_path="old.mkv", title="My Anime", season=1, episode=5, suffix=".mkv"
-        )
-        # Pre-populate check_pool with the expected new path
-        renamer.check_pool["My Anime S01E05.mkv"] = True
-
-        with patch.object(renamer._parser, "torrent_parser", return_value=ep):
-            result = await renamer.rename_file(
-                torrent_name="test",
-                media_path="old.mkv",
                 bangumi_name="My Anime",
                 method="pn",
                 season=1,

@@ -43,6 +43,8 @@ class DownloadClient(TorrentPath):
     async def __aenter__(self):
         if not self.authed:
             await self.auth()
+            if not self.authed:
+                raise ConnectionError("Download client authentication failed")
         else:
             logger.error("[Downloader] Already authed.")
         return self
@@ -237,4 +239,6 @@ class DownloadClient(TorrentPath):
     async def add_tag(self, torrent_hash: str, tag: str):
         """Add a tag to a torrent."""
         await self.client.add_tag(torrent_hash, tag)
-        logger.debug("[Downloader] Added tag '%s' to torrent %s...", tag, torrent_hash[:8])
+        logger.debug(
+            "[Downloader] Added tag '%s' to torrent %s...", tag, torrent_hash[:8]
+        )
