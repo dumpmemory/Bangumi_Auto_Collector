@@ -41,6 +41,9 @@ dev = [
 testpaths = ["src/test"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = [
+    "e2e: End-to-end integration tests (require Docker)",
+]
 
 [tool.ruff]
 line-length = 88
