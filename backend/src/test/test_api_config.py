@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from module.api import v1
-from module.api.config import _sanitize_dict
+from module.api.config import _restore_sensitive, _sanitize_dict
 from module.models.config import Config
 from module.security.api import get_current_user
 
@@ -360,3 +360,97 @@ class TestSanitizeDict:
         assert data["downloader"]["password"] == "********"
         # OpenAI api_key should be masked (it's an empty string but still masked)
         assert data["experimental_openai"]["api_key"] == "********"
+
+
+# ---------------------------------------------------------------------------
+# _restore_sensitive unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestRestoreSensitive:
+    def test_restores_masked_password(self):
+        """Masked password is replaced with the real value from current config."""
+        incoming = {"password": "********"}
+        current = {"password": "realpassword"}
+        result = _restore_sensitive(incoming, current)
+        assert result["password"] == "realpassword"
+
+    def test_non_masked_password_kept(self):
+        """A newly supplied password (not the placeholder) is kept as-is."""
+        incoming = {"password": "newpassword"}
+        current = {"password": "oldpassword"}
+        result = _restore_sensitive(incoming, current)
+        assert result["password"] == "newpassword"
+
+    def test_non_sensitive_key_passed_through(self):
+        """Non-sensitive keys are never touched."""
+        incoming = {"host": "192.168.1.1", "ssl": False}
+        current = {"host": "10.0.0.1", "ssl": True}
+        result = _restore_sensitive(incoming, current)
+        assert result["host"] == "192.168.1.1"
+        assert result["ssl"] is False
+
+    def test_nested_dict_restored(self):
+        """Masked values inside nested dicts are restored recursively."""
+        incoming = {"downloader": {"host": "192.168.1.1", "password": "********"}}
+        current = {"downloader": {"host": "10.0.0.1", "password": "realpassword"}}
+        result = _restore_sensitive(incoming, current)
+        assert result["downloader"]["host"] == "192.168.1.1"
+        assert result["downloader"]["password"] == "realpassword"
+
+    def test_missing_key_in_current_keeps_placeholder(self):
+        """If a sensitive key has no counterpart in current, keep the incoming value."""
+        incoming = {"password": "********"}
+        current = {}
+        result = _restore_sensitive(incoming, current)
+        assert result["password"] == "********"
+
+    def test_update_config_preserves_password_when_masked(self, authed_client, mock_settings):
+        """PATCH /config/update must not overwrite a real password with '********'.
+
+        Reproduces the bug where the frontend sends back the masked placeholder
+        and the backend used to save it verbatim, corrupting the stored credential.
+        """
+        mock_settings.dict.return_value = {
+            "program": {"rss_time": 900, "rename_time": 60, "webui_port": 7892},
+            "downloader": {
+                "type": "qbittorrent",
+                "host": "192.168.1.1:8080",
+                "username": "admin",
+                "password": "realpassword",
+                "path": "/downloads",
+                "ssl": True,
+            },
+            "rss_parser": {"enable": True, "filter": [], "language": "zh"},
+            "bangumi_manage": {"enable": True, "eps_complete": False, "rename_method": "pn", "group_tag": False, "remove_bad_torrent": False},
+            "log": {"debug_enable": False},
+            "proxy": {"enable": False, "type": "http", "host": "", "port": 0, "username": "", "password": ""},
+            "notification": {"enable": False, "type": "telegram", "token": "", "chat_id": ""},
+            "experimental_openai": {"enable": False, "api_key": "", "api_base": "https://api.openai.com/v1", "api_type": "openai", "api_version": "2023-05-15", "model": "gpt-3.5-turbo", "deployment_id": ""},
+        }
+        # Frontend sends back masked password and ssl changed to False
+        payload = {
+            "program": {"rss_time": 900, "rename_time": 60, "webui_port": 7892},
+            "downloader": {
+                "type": "qbittorrent",
+                "host": "192.168.1.1:8080",
+                "username": "admin",
+                "password": "********",  # <-- masked placeholder from frontend
+                "path": "/downloads",
+                "ssl": False,  # <-- the actual change the user made
+            },
+            "rss_parser": {"enable": True, "filter": [], "language": "zh"},
+            "bangumi_manage": {"enable": True, "eps_complete": False, "rename_method": "pn", "group_tag": False, "remove_bad_torrent": False},
+            "log": {"debug_enable": False},
+            "proxy": {"enable": False, "type": "http", "host": "", "port": 0, "username": "", "password": ""},
+            "notification": {"enable": False, "type": "telegram", "token": "", "chat_id": ""},
+            "experimental_openai": {"enable": False, "api_key": "", "api_base": "https://api.openai.com/v1", "api_type": "openai", "api_version": "2023-05-15", "model": "gpt-3.5-turbo", "deployment_id": ""},
+        }
+        with patch("module.api.config.settings", mock_settings):
+            response = authed_client.patch("/api/v1/config/update", json=payload)
+
+        assert response.status_code == 200
+        # The dict passed to save() must have the real password, not '********'
+        saved = mock_settings.save.call_args[1]["config_dict"]
+        assert saved["downloader"]["password"] == "realpassword"
+        assert saved["downloader"]["ssl"] is False
