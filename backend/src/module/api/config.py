@@ -26,6 +26,31 @@ def _sanitize_dict(d: dict) -> dict:
     return result
 
 
+def _restore_sensitive(incoming: dict, current: dict) -> dict:
+    """Replace masked '********' values with the real values from current config.
+
+    When the frontend submits a config update it sends back the masked
+    placeholder for every sensitive field (password, token, …).  Saving that
+    placeholder verbatim would overwrite the real credential with the literal
+    string '********'.  This function walks the incoming dict and, wherever it
+    finds the placeholder, substitutes the value that is already stored in the
+    running settings.
+    """
+    result = {}
+    for k, v in incoming.items():
+        if isinstance(v, dict):
+            result[k] = _restore_sensitive(v, current.get(k, {}))
+        elif (
+            isinstance(v, str)
+            and v == "********"
+            and any(s in k.lower() for s in _SENSITIVE_KEYS)
+        ):
+            result[k] = current.get(k, v)
+        else:
+            result[k] = v
+    return result
+
+
 @router.get("/get", dependencies=[Depends(get_current_user)])
 async def get_config():
     """Return the current configuration with sensitive fields masked."""
@@ -38,7 +63,10 @@ async def get_config():
 async def update_config(config: Config):
     """Persist and reload configuration from the supplied payload."""
     try:
-        settings.save(config_dict=config.dict())
+        incoming = config.dict()
+        current = settings.dict()
+        restored = _restore_sensitive(incoming, current)
+        settings.save(config_dict=restored)
         settings.load()
         # update_rss()
         logger.info("Config updated")
