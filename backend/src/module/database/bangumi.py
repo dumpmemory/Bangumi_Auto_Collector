@@ -390,6 +390,10 @@ class BangumiDatabase:
         logger.debug("[Database] Find bangumi id: %s.", _id)
         return bangumi
 
+    def search_official_title(self, official_title: str) -> Optional[Bangumi]:
+        statement = select(Bangumi).where(Bangumi.official_title == official_title)
+        return self.session.execute(statement).scalar_one_or_none()
+
     def search_ids(self, ids: list[int]) -> list[Bangumi]:
         """Batch lookup multiple bangumi by their IDs."""
         if not ids:
