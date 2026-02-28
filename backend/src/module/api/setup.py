@@ -132,7 +132,6 @@ async def test_downloader(req: TestDownloaderRequest):
 
     scheme = "https" if req.ssl else "http"
     host = req.host if "://" in req.host else f"{scheme}://{req.host}"
-    _validate_url(host)
 
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from module.api import v1
-from module.api.config import _sanitize_dict
+from module.api.config import _sanitize_dict, _restore_masked
 from module.models.config import Config
 from module.security.api import get_current_user
 
@@ -306,24 +306,20 @@ class TestSanitizeDict:
 
     def test_nested_dict_recursed(self):
         """Nested dicts are processed recursively."""
-        result = _sanitize_dict({
-            "downloader": {
-                "host": "localhost",
-                "password": "secret",
+        result = _sanitize_dict(
+            {
+                "downloader": {
+                    "host": "localhost",
+                    "password": "secret",
+                }
             }
-        })
+        )
         assert result["downloader"]["host"] == "localhost"
         assert result["downloader"]["password"] == "********"
 
     def test_deeply_nested_dict(self):
         """Deeply nested sensitive keys are masked."""
-        result = _sanitize_dict({
-            "level1": {
-                "level2": {
-                    "api_key": "deep-secret"
-                }
-            }
-        })
+        result = _sanitize_dict({"level1": {"level2": {"api_key": "deep-secret"}}})
         assert result["level1"]["level2"]["api_key"] == "********"
 
     def test_non_string_value_not_masked(self):
@@ -338,16 +334,32 @@ class TestSanitizeDict:
 
     def test_mixed_sensitive_and_plain(self):
         """Mix of sensitive and plain keys handled correctly."""
-        result = _sanitize_dict({
-            "username": "admin",
-            "password": "secret",
-            "host": "10.0.0.1",
-            "token": "jwt-abc",
-        })
+        result = _sanitize_dict(
+            {
+                "username": "admin",
+                "password": "secret",
+                "host": "10.0.0.1",
+                "token": "jwt-abc",
+            }
+        )
         assert result["username"] == "admin"
         assert result["host"] == "10.0.0.1"
         assert result["password"] == "********"
         assert result["token"] == "********"
+
+    def test_sanitize_list_of_dicts(self):
+        """Lists containing dicts are recursed into."""
+        result = _sanitize_dict(
+            {
+                "providers": [
+                    {"type": "telegram", "token": "secret-token"},
+                    {"type": "bark", "token": "another-secret"},
+                ]
+            }
+        )
+        assert result["providers"][0]["token"] == "********"
+        assert result["providers"][1]["token"] == "********"
+        assert result["providers"][0]["type"] == "telegram"
 
     def test_get_config_masks_sensitive_fields(self, authed_client):
         """GET /config/get response masks password and api_key fields."""
@@ -360,3 +372,200 @@ class TestSanitizeDict:
         assert data["downloader"]["password"] == "********"
         # OpenAI api_key should be masked (it's an empty string but still masked)
         assert data["experimental_openai"]["api_key"] == "********"
+
+
+# ---------------------------------------------------------------------------
+# _restore_masked unit tests (#995)
+# ---------------------------------------------------------------------------
+
+
+class TestRestoreMasked:
+    """Issue #995: Masked passwords must not overwrite real credentials."""
+
+    def test_masked_password_restored(self):
+        """Masked password is replaced with the real stored value."""
+        incoming = {"password": "********"}
+        current = {"password": "real_secret"}
+        _restore_masked(incoming, current)
+        assert incoming["password"] == "real_secret"
+
+    def test_new_password_preserved(self):
+        """Non-masked password value is kept as-is."""
+        incoming = {"password": "new_password"}
+        current = {"password": "old_password"}
+        _restore_masked(incoming, current)
+        assert incoming["password"] == "new_password"
+
+    def test_nested_masked_password_restored(self):
+        """Masked password inside nested dict is restored."""
+        incoming = {"downloader": {"host": "10.0.0.1", "password": "********"}}
+        current = {"downloader": {"host": "10.0.0.1", "password": "adminadmin"}}
+        _restore_masked(incoming, current)
+        assert incoming["downloader"]["password"] == "adminadmin"
+
+    def test_nested_new_password_preserved(self):
+        """Non-masked password inside nested dict is kept."""
+        incoming = {"downloader": {"password": "changed"}}
+        current = {"downloader": {"password": "old"}}
+        _restore_masked(incoming, current)
+        assert incoming["downloader"]["password"] == "changed"
+
+    def test_multiple_sensitive_fields(self):
+        """All sensitive fields are handled independently."""
+        incoming = {
+            "downloader": {"password": "********"},
+            "proxy": {"password": "new_proxy_pass"},
+            "experimental_openai": {"api_key": "********"},
+        }
+        current = {
+            "downloader": {"password": "qb_pass"},
+            "proxy": {"password": "old_proxy_pass"},
+            "experimental_openai": {"api_key": "sk-real-key"},
+        }
+        _restore_masked(incoming, current)
+        assert incoming["downloader"]["password"] == "qb_pass"
+        assert incoming["proxy"]["password"] == "new_proxy_pass"
+        assert incoming["experimental_openai"]["api_key"] == "sk-real-key"
+
+    def test_non_sensitive_mask_value_untouched(self):
+        """A non-sensitive key with '********' value is not modified."""
+        incoming = {"host": "********"}
+        current = {"host": "10.0.0.1"}
+        _restore_masked(incoming, current)
+        assert incoming["host"] == "********"
+
+    def test_list_of_dicts_restored(self):
+        """Masked tokens inside list items are restored."""
+        incoming = {
+            "providers": [
+                {"type": "telegram", "token": "********"},
+                {"type": "bark", "token": "new-bark-token"},
+            ]
+        }
+        current = {
+            "providers": [
+                {"type": "telegram", "token": "real-tg-token"},
+                {"type": "bark", "token": "old-bark-token"},
+            ]
+        }
+        _restore_masked(incoming, current)
+        assert incoming["providers"][0]["token"] == "real-tg-token"
+        assert incoming["providers"][1]["token"] == "new-bark-token"
+
+    def test_empty_dicts(self):
+        """Empty dicts don't cause errors."""
+        _restore_masked({}, {})
+
+    def test_round_trip_preserves_credentials(self):
+        """Full round-trip: sanitize then restore recovers original values."""
+        original = {
+            "downloader": {"host": "10.0.0.1", "password": "secret123"},
+            "experimental_openai": {"api_key": "sk-abc", "model": "gpt-4"},
+        }
+        sanitized = _sanitize_dict(original)
+        assert sanitized["downloader"]["password"] == "********"
+        assert sanitized["experimental_openai"]["api_key"] == "********"
+
+        _restore_masked(sanitized, original)
+        assert sanitized["downloader"]["password"] == "secret123"
+        assert sanitized["experimental_openai"]["api_key"] == "sk-abc"
+        assert sanitized["downloader"]["host"] == "10.0.0.1"
+        assert sanitized["experimental_openai"]["model"] == "gpt-4"
+
+    def test_update_config_preserves_password_when_masked(
+        self, authed_client, mock_settings
+    ):
+        """PATCH /config/update must not overwrite a real password with '********'."""
+        mock_settings.dict.return_value = {
+            "program": {"rss_time": 900, "rename_time": 60, "webui_port": 7892},
+            "downloader": {
+                "type": "qbittorrent",
+                "host": "192.168.1.1:8080",
+                "username": "admin",
+                "password": "realpassword",
+                "path": "/downloads",
+                "ssl": True,
+            },
+            "rss_parser": {"enable": True, "filter": [], "language": "zh"},
+            "bangumi_manage": {
+                "enable": True,
+                "eps_complete": False,
+                "rename_method": "pn",
+                "group_tag": False,
+                "remove_bad_torrent": False,
+            },
+            "log": {"debug_enable": False},
+            "proxy": {
+                "enable": False,
+                "type": "http",
+                "host": "",
+                "port": 0,
+                "username": "",
+                "password": "",
+            },
+            "notification": {
+                "enable": False,
+                "type": "telegram",
+                "token": "",
+                "chat_id": "",
+            },
+            "experimental_openai": {
+                "enable": False,
+                "api_key": "",
+                "api_base": "https://api.openai.com/v1",
+                "api_type": "openai",
+                "api_version": "2023-05-15",
+                "model": "gpt-3.5-turbo",
+                "deployment_id": "",
+            },
+        }
+        payload = {
+            "program": {"rss_time": 900, "rename_time": 60, "webui_port": 7892},
+            "downloader": {
+                "type": "qbittorrent",
+                "host": "192.168.1.1:8080",
+                "username": "admin",
+                "password": "********",
+                "path": "/downloads",
+                "ssl": False,
+            },
+            "rss_parser": {"enable": True, "filter": [], "language": "zh"},
+            "bangumi_manage": {
+                "enable": True,
+                "eps_complete": False,
+                "rename_method": "pn",
+                "group_tag": False,
+                "remove_bad_torrent": False,
+            },
+            "log": {"debug_enable": False},
+            "proxy": {
+                "enable": False,
+                "type": "http",
+                "host": "",
+                "port": 0,
+                "username": "",
+                "password": "",
+            },
+            "notification": {
+                "enable": False,
+                "type": "telegram",
+                "token": "",
+                "chat_id": "",
+            },
+            "experimental_openai": {
+                "enable": False,
+                "api_key": "",
+                "api_base": "https://api.openai.com/v1",
+                "api_type": "openai",
+                "api_version": "2023-05-15",
+                "model": "gpt-3.5-turbo",
+                "deployment_id": "",
+            },
+        }
+        with patch("module.api.config.settings", mock_settings):
+            response = authed_client.patch("/api/v1/config/update", json=payload)
+
+        assert response.status_code == 200
+        saved = mock_settings.save.call_args[1]["config_dict"]
+        assert saved["downloader"]["password"] == "realpassword"
+        assert saved["downloader"]["ssl"] is False

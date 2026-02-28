@@ -51,7 +51,7 @@ class RSSParser(BaseModel):
     """RSS feed parsing settings."""
 
     enable: bool = Field(True, description="Enable RSS parser")
-    filter: list[str] = Field(["720", r"\d+-\d"], description="Filter")
+    filter: list[str] = Field(["720", r"\d+-\d+"], description="Filter")
     language: str = "zh"
 
 

@@ -15,6 +15,7 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.routing import Mount, Route
 
 from .resources import RESOURCE_TEMPLATES, RESOURCES, handle_resource
@@ -64,6 +65,7 @@ async def handle_sse(request: Request):
             streams[1],
             server.create_initialization_options(),
         )
+    return Response()
 
 
 def create_mcp_starlette_app() -> Starlette:

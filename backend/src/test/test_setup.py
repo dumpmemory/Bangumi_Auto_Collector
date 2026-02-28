@@ -124,57 +124,109 @@ class TestSetupGuard:
 
 
 class TestTestDownloader:
+    def test_private_ip_accepted(self, client, mock_first_run):
+        """Issue #1001: Private IPs must not be rejected for downloader test."""
+        import httpx
+
+        with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
+            mock_instance = AsyncMock()
+            mock_instance.get.side_effect = httpx.ConnectError("refused")
+            mock_client_cls.return_value.__aenter__ = AsyncMock(
+                return_value=mock_instance
+            )
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            response = client.post(
+                "/api/v1/setup/test-downloader",
+                json={
+                    "type": "qbittorrent",
+                    "host": "192.168.1.100:8080",
+                    "username": "admin",
+                    "password": "admin",
+                    "ssl": False,
+                },
+            )
+            # Should reach the connection attempt, not get blocked by IP validation
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+            assert "connect" in data["message_en"].lower()
+
+    def test_loopback_ip_accepted(self, client, mock_first_run):
+        """Issue #1001: Loopback IPs must not be rejected for downloader test."""
+        import httpx
+
+        with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
+            mock_instance = AsyncMock()
+            mock_instance.get.side_effect = httpx.ConnectError("refused")
+            mock_client_cls.return_value.__aenter__ = AsyncMock(
+                return_value=mock_instance
+            )
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            response = client.post(
+                "/api/v1/setup/test-downloader",
+                json={
+                    "type": "qbittorrent",
+                    "host": "127.0.0.1:8080",
+                    "username": "admin",
+                    "password": "admin",
+                    "ssl": False,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
+
     def test_connection_timeout(self, client, mock_first_run):
         import httpx
 
-        with patch("module.api.setup._validate_url"):
-            with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
-                mock_instance = AsyncMock()
-                mock_instance.get.side_effect = httpx.TimeoutException("timeout")
-                mock_client_cls.return_value.__aenter__ = AsyncMock(
-                    return_value=mock_instance
-                )
-                mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
+            mock_instance = AsyncMock()
+            mock_instance.get.side_effect = httpx.TimeoutException("timeout")
+            mock_client_cls.return_value.__aenter__ = AsyncMock(
+                return_value=mock_instance
+            )
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
-                response = client.post(
-                    "/api/v1/setup/test-downloader",
-                    json={
-                        "type": "qbittorrent",
-                        "host": "localhost:8080",
-                        "username": "admin",
-                        "password": "admin",
-                        "ssl": False,
-                    },
-                )
-                assert response.status_code == 200
-                data = response.json()
-                assert data["success"] is False
+            response = client.post(
+                "/api/v1/setup/test-downloader",
+                json={
+                    "type": "qbittorrent",
+                    "host": "localhost:8080",
+                    "username": "admin",
+                    "password": "admin",
+                    "ssl": False,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
 
     def test_connection_refused(self, client, mock_first_run):
         import httpx
 
-        with patch("module.api.setup._validate_url"):
-            with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
-                mock_instance = AsyncMock()
-                mock_instance.get.side_effect = httpx.ConnectError("refused")
-                mock_client_cls.return_value.__aenter__ = AsyncMock(
-                    return_value=mock_instance
-                )
-                mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        with patch("module.api.setup.httpx.AsyncClient") as mock_client_cls:
+            mock_instance = AsyncMock()
+            mock_instance.get.side_effect = httpx.ConnectError("refused")
+            mock_client_cls.return_value.__aenter__ = AsyncMock(
+                return_value=mock_instance
+            )
+            mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
 
-                response = client.post(
-                    "/api/v1/setup/test-downloader",
-                    json={
-                        "type": "qbittorrent",
-                        "host": "localhost:8080",
-                        "username": "admin",
-                        "password": "admin",
-                        "ssl": False,
-                    },
-                )
-                assert response.status_code == 200
-                data = response.json()
-                assert data["success"] is False
+            response = client.post(
+                "/api/v1/setup/test-downloader",
+                json={
+                    "type": "qbittorrent",
+                    "host": "localhost:8080",
+                    "username": "admin",
+                    "password": "admin",
+                    "ssl": False,
+                },
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is False
 
 
 class TestTestRSS:

@@ -11,6 +11,11 @@ router = APIRouter(prefix="/config", tags=["config"])
 logger = logging.getLogger(__name__)
 
 _SENSITIVE_KEYS = ("password", "api_key", "token", "secret")
+_MASK = "********"
+
+
+def _is_sensitive(key: str) -> bool:
+    return any(s in key.lower() for s in _SENSITIVE_KEYS)
 
 
 def _sanitize_dict(d: dict) -> dict:
@@ -19,11 +24,34 @@ def _sanitize_dict(d: dict) -> dict:
     for k, v in d.items():
         if isinstance(v, dict):
             result[k] = _sanitize_dict(v)
-        elif isinstance(v, str) and any(s in k.lower() for s in _SENSITIVE_KEYS):
-            result[k] = "********"
+        elif isinstance(v, list):
+            result[k] = [
+                _sanitize_dict(item) if isinstance(item, dict) else item for item in v
+            ]
+        elif isinstance(v, str) and _is_sensitive(k):
+            result[k] = _MASK
         else:
             result[k] = v
     return result
+
+
+def _restore_masked(incoming: dict, current: dict) -> dict:
+    """Replace masked sentinel values with real values from current config."""
+    for k, v in incoming.items():
+        if isinstance(v, dict) and isinstance(current.get(k), dict):
+            _restore_masked(v, current[k])
+        elif isinstance(v, list) and isinstance(current.get(k), list):
+            cur_list = current[k]
+            for i, item in enumerate(v):
+                if (
+                    isinstance(item, dict)
+                    and i < len(cur_list)
+                    and isinstance(cur_list[i], dict)
+                ):
+                    _restore_masked(item, cur_list[i])
+        elif v == _MASK and _is_sensitive(k):
+            incoming[k] = current.get(k, v)
+    return incoming
 
 
 @router.get("/get", dependencies=[Depends(get_current_user)])
@@ -38,7 +66,8 @@ async def get_config():
 async def update_config(config: Config):
     """Persist and reload configuration from the supplied payload."""
     try:
-        settings.save(config_dict=config.dict())
+        config_dict = _restore_masked(config.dict(), settings.dict())
+        settings.save(config_dict=config_dict)
         settings.load()
         # update_rss()
         logger.info("Config updated")
