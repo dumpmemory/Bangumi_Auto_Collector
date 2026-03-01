@@ -68,6 +68,8 @@ class TitleParser:
                 episode = Episode(**episode_dict)
             else:
                 episode = raw_parser(raw)
+                if episode is None:
+                    return None
 
             titles = {
                 "zh": episode.title_zh,

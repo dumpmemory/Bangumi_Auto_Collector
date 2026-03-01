@@ -14,8 +14,8 @@ SOURCE_RE = re.compile(r"B-Global|[Bb]aha|[Bb]ilibili|AT-X|Web")
 SUB_RE = re.compile(r"[简繁日字幕]|CH|BIG5|GB")
 
 FALLBACK_EP_PATTERNS = [
-    re.compile(r" (\d+) ?(?=\[)"),       # #876/#910: digits before [
-    re.compile(r"\[(\d+)\(\d+\)\]"),      # #773: [02(57)]
+    re.compile(r" (\d+) ?(?=\[)"),  # #876/#910: digits before [
+    re.compile(r"\[(\d+)\(\d+\)\]"),  # #773: [02(57)]
 ]
 
 PREFIX_RE = re.compile(r"[^\w\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff-]")
@@ -31,6 +31,7 @@ def _fallback_parse(content_title: str) -> tuple | None:
             other = content_title[m.end() :].strip()
             return season_info, episode_info, other
     return None
+
 
 CHINESE_NUMBER_MAP = {
     "一": 1,
@@ -201,7 +202,7 @@ def process(raw_title: str):
 def raw_parser(raw: str) -> Episode | None:
     ret = process(raw)
     if ret is None:
-        logger.error(f"Parser cannot analyse {raw}")
+        logger.info(f"Detected non-episodic resource: {raw}, skipping.")
         return None
     name_en, name_zh, name_jp, season, sr, episode, sub, dpi, source, group = ret
     return Episode(

@@ -92,35 +92,53 @@ class TestIssue977EpisodeZeroOffset:
     def test_episode_zero_preserved_with_no_offset(self):
         """Episode 0 with offset=0 stays as E00."""
         ep = EpisodeFile(
-            media_path="old.mkv", title="Fate strange Fake", season=1,
-            episode=0, suffix=".mkv",
+            media_path="old.mkv",
+            title="Fate strange Fake",
+            season=1,
+            episode=0,
+            suffix=".mkv",
         )
-        result = Renamer.gen_path(ep, "Fate strange Fake", method="pn", episode_offset=0)
+        result = Renamer.gen_path(
+            ep, "Fate strange Fake", method="pn", episode_offset=0
+        )
         assert "E00" in result
 
     def test_episode_zero_immune_to_positive_offset(self):
         """Episode 0 (special/OVA) should not be shifted by positive offset."""
         ep = EpisodeFile(
-            media_path="old.mkv", title="Fate strange Fake", season=1,
-            episode=0, suffix=".mkv",
+            media_path="old.mkv",
+            title="Fate strange Fake",
+            season=1,
+            episode=0,
+            suffix=".mkv",
         )
-        result = Renamer.gen_path(ep, "Fate strange Fake", method="pn", episode_offset=1)
+        result = Renamer.gen_path(
+            ep, "Fate strange Fake", method="pn", episode_offset=1
+        )
         assert "E00" in result
 
     def test_episode_zero_immune_to_negative_offset(self):
         """Episode 0 (special/OVA) should not be shifted by negative offset."""
         ep = EpisodeFile(
-            media_path="old.mkv", title="Fate strange Fake", season=1,
-            episode=0, suffix=".mkv",
+            media_path="old.mkv",
+            title="Fate strange Fake",
+            season=1,
+            episode=0,
+            suffix=".mkv",
         )
-        result = Renamer.gen_path(ep, "Fate strange Fake", method="pn", episode_offset=-12)
+        result = Renamer.gen_path(
+            ep, "Fate strange Fake", method="pn", episode_offset=-12
+        )
         assert "E00" in result
 
     def test_regular_episode_offset_still_works(self):
         """Regular episodes should still be affected by offset normally."""
         ep = EpisodeFile(
-            media_path="old.mkv", title="Test", season=1,
-            episode=13, suffix=".mkv",
+            media_path="old.mkv",
+            title="Test",
+            season=1,
+            episode=13,
+            suffix=".mkv",
         )
         result = Renamer.gen_path(ep, "Test", method="pn", episode_offset=-12)
         assert "E01" in result  # 13 - 12 = 1
@@ -128,10 +146,15 @@ class TestIssue977EpisodeZeroOffset:
     def test_episode_zero_advance_method(self):
         """Episode 0 with advance method and no offset stays E00."""
         ep = EpisodeFile(
-            media_path="old.mkv", title="Test", season=1,
-            episode=0, suffix=".mkv",
+            media_path="old.mkv",
+            title="Test",
+            season=1,
+            episode=0,
+            suffix=".mkv",
         )
-        result = Renamer.gen_path(ep, "Bangumi Name", method="advance", episode_offset=0)
+        result = Renamer.gen_path(
+            ep, "Bangumi Name", method="advance", episode_offset=0
+        )
         assert result == "Bangumi Name S01E00.mkv"
 
 
@@ -304,7 +327,9 @@ class TestIssue974FilterPatternError:
 class TestIssue990NumberPrefixTitle:
     """Issue #990: Titles starting with numbers crash RSS loop."""
 
-    PROBLEM_TITLE = "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
+    PROBLEM_TITLE = (
+        "[ANi] 29 岁单身中坚冒险家的日常 - 07 [1080P][Baha][WEB-DL][AAC AVC][CHT][MP4]"
+    )
 
     def test_raw_parser_correctly_parses_leading_number_title(self):
         """raw_parser correctly parses title starting with number and extracts episode."""
@@ -458,3 +483,77 @@ class TestIssue990NumberPrefixTitle:
 
         # Should not crash even with corrupted data in the DB
         unmatched = db.match_list([torrent], "https://mikanani.me/RSS/test")
+
+
+# ---------------------------------------------------------------------------
+# Issue #992: Non-episodic resource causes AttributeError in title_parser
+# https://github.com/EstrellaXD/Auto_Bangumi/issues/992
+#
+# When raw_parser returns None (movie/collection resources), title_parser
+# accesses episode.title_zh on None, causing AttributeError.
+# ---------------------------------------------------------------------------
+
+
+class TestIssue992NonEpisodicAttributeError:
+    """Issue #992: title_parser crashes on non-episodic resources."""
+
+    # Titles that raw_parser cannot parse (returns None)
+    NON_EPISODIC_TITLES = [
+        "[阿特拉斯字幕组·雪原市出差所][命运-奇异赝品_Fate／strange Fake][04_半神们的卡农曲][简繁日内封PGS][日语配音版_Japanese Dub][Web-DL Remux][1080p AVC AAC]",
+        "[KitaujiSub] Shikanoko Nokonoko Koshitantan [01Pre][WebRip][HEVC_AAC][CHS_JP].mp4",
+    ]
+
+    @pytest.mark.parametrize("title", NON_EPISODIC_TITLES)
+    def test_title_parser_returns_none_for_non_episodic(self, title):
+        """TitleParser.raw_parser should return None instead of crashing."""
+        from module.parser.title_parser import TitleParser
+
+        result = TitleParser.raw_parser(title)
+        assert result is None
+
+    def test_raw_parser_returns_none_for_unparseable(self):
+        """raw_parser returns None for resources it cannot parse."""
+        result = raw_parser(self.NON_EPISODIC_TITLES[0])
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Issue #1005: BangumiDatabase missing search_official_title method
+# https://github.com/EstrellaXD/Auto_Bangumi/issues/1005
+# ---------------------------------------------------------------------------
+
+
+class TestIssue1005SearchOfficialTitle:
+    """Issue #1005: search_official_title method must exist on BangumiDatabase."""
+
+    def test_method_exists(self):
+        """BangumiDatabase should have search_official_title method."""
+        from module.database.bangumi import BangumiDatabase
+
+        assert hasattr(BangumiDatabase, "search_official_title")
+
+    def test_search_official_title_finds_match(self, db_session):
+        """search_official_title returns the matching bangumi."""
+        from module.database.bangumi import BangumiDatabase
+        from module.models import Bangumi
+
+        db = BangumiDatabase(db_session)
+        bangumi = Bangumi(
+            official_title="路人女主的养成方法",
+            title_raw="Saenai Heroine no Sodatekata",
+            season=1,
+            rss_link="test",
+        )
+        db.add(bangumi)
+
+        result = db.search_official_title("路人女主的养成方法")
+        assert result is not None
+        assert result.official_title == "路人女主的养成方法"
+
+    def test_search_official_title_returns_none_when_not_found(self, db_session):
+        """search_official_title returns None for non-existent title."""
+        from module.database.bangumi import BangumiDatabase
+
+        db = BangumiDatabase(db_session)
+        result = db.search_official_title("不存在的番剧")
+        assert result is None
